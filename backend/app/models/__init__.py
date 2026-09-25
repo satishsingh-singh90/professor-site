@@ -1,0 +1,18 @@
+from .professor import (
+    Professor,
+    ResearchArea,
+    Project,
+    Publication,
+    Patent,
+    Education,
+    Experience,
+    Award,
+    Course,
+    Blog,
+    Testimonial,
+    Gallery,
+    SocialLink,
+    Newsletter,
+    ScheduleSlot,
+    ScholarMetrics,
+)
