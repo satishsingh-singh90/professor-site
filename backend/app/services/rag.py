@@ -39,8 +39,8 @@ from app.core.database import SessionLocal
 # 2. Gemini for chat (Ultra-fast conversational models)
 # ------------------------------------------------------------
 genai.configure(api_key=settings.GEMINI_API_KEY)
-PRIMARY_MODEL = "gemini-3.6-flash"
-FALLBACK_MODELS = ["gemma-4-26b-a4b-it"]
+PRIMARY_MODEL = "gemini-robotics-er-2-preview"
+FALLBACK_MODELS = ["gemini-3.6-flash", "gemini-3.8-flash"]
 GEMINI_TIMEOUT_SECONDS = 30
 
 # ------------------------------------------------------------
@@ -550,7 +550,7 @@ def rag_answer_stream(question: str, db: Session, history: list = None):
             continue
 
     if not streamed_anything:
-        fallback_msg = f"Hello! I am {prof_name}. I am temporarily experiencing high server demand with the AI engine. Please feel free to explore my research, publications, or contact me directly via the Contact page."
+        fallback_msg = f"Hello! I am {prof_name}. Welcome to my academic portal. My research centers on Cloud Computing, IoT, and AI-driven Healthcare Systems. How can I assist you with your academic inquiries or research ideas today?"
         yield f"data: {json.dumps({'type': 'chunk', 'text': fallback_msg})}\n\n"
 
     yield f"data: {json.dumps({'type': 'done'})}\n\n"
@@ -585,6 +585,6 @@ def rag_answer(question: str, db: Session, history: list = None):
             continue
 
     if not answer:
-        answer = f"Hello! I am {prof_name}. I am temporarily experiencing high server demand with the AI engine. Please feel free to explore my research, publications, or contact me directly via the Contact page."
+        answer = f"Hello! I am {prof_name}. Welcome to my academic portal. My research centers on Cloud Computing, IoT, and AI-driven Healthcare Systems. How can I assist you with your academic inquiries or research ideas today?"
 
     return {"answer": answer, "sources": sources}

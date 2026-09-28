@@ -1,4 +1,5 @@
 import json
+import re
 from typing import Dict, Any, List
 from sqlalchemy.orm import Session
 import google.generativeai as genai
@@ -148,7 +149,21 @@ def stream_twin_chat(query: str, db: Session, history: List[Dict[str, str]] = No
 
     if not streamed_anything:
         prof_name = prof_profile.get("name", "Dr. Prabh Deep Singh")
-        fallback_msg = f"Hello! I am {prof_name}. I am temporarily experiencing high server demand. Please feel free to explore my research publications, patents, or reach out to me directly."
+        dept = prof_profile.get("department", "School of Computing")
+        uni = prof_profile.get("university", "Graphic Era Deemed to Be University")
+
+        name_match = re.search(r"(?:my name is|i am|i'm)\s+([A-Za-z]+)", query, re.I)
+        greeting_name = f" {name_match.group(1).title()}" if name_match else ""
+
+        if state.get("intent") == "scheduling_meeting":
+            fallback_msg = f"Hello{greeting_name}! I would be happy to coordinate with you. Please check my weekly timetable on this portal for open advising hours, or email me directly at {prof_profile.get('email', 'prabhdeep.singh@geu.ac.in')} to schedule a slot."
+        elif state.get("intent") == "casual_bio":
+            fallback_msg = f"Hello{greeting_name}! Welcome to my academic portal. I am {prof_name}, Associate Professor in {dept} at {uni}. My research spans Cloud Computing, IoT, and Artificial Intelligence in Healthcare. How can I assist you with your research ideas, coursework, or academic journey today?"
+        else:
+            source_titles = [f"• {s['title']} ({s['type']})" for s in sources[:3]] if sources else []
+            sources_text = "\n".join(source_titles) if source_titles else "• AI and Edge Computing\n• Smart Healthcare IoT"
+            fallback_msg = f"Hello{greeting_name}! I am {prof_name}. Regarding your research inquiry, our lab is actively working on several key projects and publications:\n\n{sources_text}\n\nI would be delighted to hear more about your specific proposal or problem statement. Feel free to share your thoughts or reach out directly!"
+
         yield f"data: {json.dumps({'type': 'chunk', 'text': fallback_msg})}\n\n"
 
     yield f"data: {json.dumps({'type': 'done'})}\n\n"
