@@ -22,7 +22,11 @@
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
     "tailwindcss": "^3.4.17",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "@tiptap/extension-link": "^2.11.5",
+    "@tiptap/pm": "^2.11.5",
+    "@tiptap/react": "^2.11.5",
+    "@tiptap/starter-kit": "^2.11.5"
   },
   "devDependencies": {
     "@types/node": "^20.17.0",
