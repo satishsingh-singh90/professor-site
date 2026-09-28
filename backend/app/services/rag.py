@@ -5,7 +5,11 @@ import google.generativeai as genai
 from sqlalchemy.orm import Session
 from sqlalchemy import text, bindparam
 from app.core.config import settings
-from sentence_transformers import SentenceTransformer
+try:
+    from sentence_transformers import SentenceTransformer
+except ImportError:
+    SentenceTransformer = None
+
 from pgvector.sqlalchemy import Vector
 from app.models.professor import (
     Professor,
@@ -211,13 +215,20 @@ def get_embedding(text_input: str) -> list[float]:
     if not text_input or not text_input.strip():
         return [0.0] * 384
     if embedder is None:
+        if SentenceTransformer is not None:
+            try:
+                embedder = SentenceTransformer(EMBEDDING_MODEL_NAME)
+            except Exception as e:
+                print(f"[RAG] Local embedder load notice: {e}")
+                embedder = False
+        else:
+            embedder = False
+    if embedder:
         try:
-            embedder = SentenceTransformer(EMBEDDING_MODEL_NAME)
+            emb = embedder.encode(text_input, convert_to_numpy=True)
+            return emb.tolist()
         except Exception:
-            pass
-    if embedder is not None:
-        emb = embedder.encode(text_input, convert_to_numpy=True)
-        return emb.tolist()
+            return [0.0] * 384
     return [0.0] * 384
 
 # ------------------------------------------------------------
