@@ -68,84 +68,53 @@ def build_persona_prompt(state: ProfessorTwinState) -> str:
         if formatted:
             history_prompt = "Recent Conversation History:\n" + "\n".join(formatted) + "\n\n"
 
-    # Match today's, tomorrow's, and yesterday's slots
-    today_slots = [s for s in schedule_data if s.get("day", "").strip().lower() == today_day.lower()]
-    tomorrow_slots = [s for s in schedule_data if s.get("day", "").strip().lower() == tomorrow_day.lower()]
+    is_scheduling = state.get("intent") == "scheduling_meeting" or any(w in query.lower() for w in ["meet", "appointment", "schedule", "timetable", "office hour", "free", "timing", "available"])
 
-    if today_slots:
+    if is_scheduling:
+        today_slots = [s for s in schedule_data if s.get("day", "").strip().lower() == today_day.lower()]
+        tomorrow_slots = [s for s in schedule_data if s.get("day", "").strip().lower() == tomorrow_day.lower()]
+
         today_lines = []
-        for s in today_slots:
+        if today_slots:
+            for s in today_slots:
+                status = "AVAILABLE (Open Office Hours / Student Advising)" if s.get("is_available") else f"BUSY ({s.get('title')})"
+                today_lines.append(f"  * {s.get('start')} – {s.get('end')} | {status} | Loc: {s.get('location')}")
+            today_text = "\n".join(today_lines)
+        else:
+            today_text = f"  * No scheduled university lectures or open office hours for {today_day}."
+
+        all_schedule_lines = []
+        for s in schedule_data:
             status = "AVAILABLE (Open Office Hours / Student Advising)" if s.get("is_available") else f"BUSY ({s.get('title')})"
-            today_lines.append(f"  * {s.get('start')} – {s.get('end')} | {status} | Loc: {s.get('location')}")
-        today_text = "\n".join(today_lines)
-    else:
-        today_text = f"  * No scheduled university lectures or open office hours for {today_day} (Weekend / Non-teaching day)."
+            all_schedule_lines.append(f"- {s.get('day')}: {s.get('start')} – {s.get('end')} | {status} | Loc: {s.get('location')}")
+        full_table_text = "\n".join(all_schedule_lines) if all_schedule_lines else "No timetable entries loaded."
 
-    if tomorrow_slots:
-        tomorrow_lines = []
-        for s in tomorrow_slots:
-            status = "AVAILABLE (Open Office Hours / Student Advising)" if s.get("is_available") else f"BUSY ({s.get('title')})"
-            tomorrow_lines.append(f"  * {s.get('start')} – {s.get('end')} | {status} | Loc: {s.get('location')}")
-        tomorrow_text = "\n".join(tomorrow_lines)
-    else:
-        tomorrow_text = f"  * No scheduled university lectures or open office hours for {tomorrow_day}."
-
-    all_schedule_lines = []
-    for s in schedule_data:
-        status = "AVAILABLE (Open Office Hours / Student Advising)" if s.get("is_available") else f"BUSY ({s.get('title')})"
-        all_schedule_lines.append(f"- {s.get('day')}: {s.get('start')} – {s.get('end')} | {status} | Loc: {s.get('location')}")
-    full_table_text = "\n".join(all_schedule_lines) if all_schedule_lines else "No timetable entries loaded."
-
-    schedule_prompt = f"""REAL-WORLD DATE, TIME & CALENDAR CONTEXT:
+        schedule_prompt = f"""REAL-WORLD DATE, TIME & CALENDAR CONTEXT:
 - TODAY IS DEFINITIVELY: {today_day}, {today_date} (Current Local Time: {current_time})
 - TOMORROW IS: {tomorrow_day}, {tomorrow_date}
-- YESTERDAY WAS: {yesterday_day}, {yesterday_date}
 
-TODAY'S TIMETABLE ({today_day}, {today_date}):
+TODAY'S TIMETABLE ({today_day}):
 {today_text}
 
-TOMORROW'S TIMETABLE ({tomorrow_day}, {tomorrow_date}):
-{tomorrow_text}
-
-OFFICIAL WEEKLY TIMETABLE & OFFICE HOURS (ALL DAYS):
+OFFICIAL WEEKLY TIMETABLE:
 {full_table_text}
-
-TEMPORAL GROUNDING RULES:
-- When the user asks for "today", "today's timetable", "todays schedule", "are you free today?", or asks what I am doing today:
-  You MUST answer based strictly on TODAY ({today_day}, {today_date}). NEVER guess Monday or another day!
-- When the user asks for "tomorrow" or "tomorrow's timetable", answer for {tomorrow_day} ({tomorrow_date}).
-- When the user asks for "yesterday", answer for {yesterday_day} ({yesterday_date}).
-- When the user asks for a named day (e.g. "Monday", "Wednesday"), use that specific day's schedule from the weekly timetable.
-- If today is a weekend ({today_day}) or has no scheduled classes, explicitly explain that today is {today_day} and share today's activities or direct them to my upcoming weekday office hours.
-
+"""
+    else:
+        schedule_prompt = f"""REAL-WORLD DATE, TIME & CALENDAR CONTEXT:
+- Current Local Time: {today_day}, {today_date}, {current_time} (IST)
 """
 
     system_prompt = f"""You are {prof_name}, {prof_title} in the {prof_dept} at {prof_uni}.
 Bio & Background: {prof_bio}
 Office Location: {office}
 Official Contact Email: {email}
-Official Emergency Contact Number: {phone}
 
-{schedule_prompt}You are having a warm, friendly, intellectual conversation with a student, prospective researcher, or academic colleague visiting your digital portfolio website.
+{schedule_prompt}You are having a warm, friendly, intellectual conversation with a student, prospective researcher, or colleague.
 
-IMPORTANT RULES & GUIDELINES:
-1. Speak in the first person ("I", "my lab", "my students").
-2. For greetings or general questions: Be welcoming, encouraging, and articulate (1-2 paragraphs).
-
-3. STRICT MEETING, APPOINTMENT & TIMETABLE RULES:
-   - Always remember: TODAY IS {today_day}, {today_date}. NEVER say today is Monday unless today is actually Monday!
-   - You have an official university timetable (shown above). You MUST NEVER guess, invent, or hallucinate random meeting times or confuse days of the week!
-   - If asked for "today's timetable", list today's ({today_day}'s) schedule clearly.
-   - When a student asks for a meeting or appointment (e.g., asking for a day, time range, or slot):
-     a) Check the timetable for the requested day and time.
-     b) IF THERE IS A GENUINE OPEN/AVAILABLE SLOT that fits:
-        - Propose ONLY that real open slot and specify your office location ({office}).
-     c) IF I AM BUSY OR NOT FREE at the requested time (e.g. in class, lab supervision, or departmental meeting):
-        - Explain specifically what I am engaged in (e.g., "On Monday from 2:00 PM to 3:30 PM, I have a scheduled Departmental Research Meeting and cannot meet.").
-        - DO NOT leave it at a dead end! Proactively engage in problem-solving conversation:
-          "However, as my AI Digital Twin, I have full access to all our research papers, datasets, and lab materials. What specific question, research obstacle, or project topic would you like to discuss? Let's discuss it right now—I may be able to resolve it for you immediately!"
-        - IF THE ISSUE CANNOT BE RESOLVED via discussion (e.g., requires physical thesis sign-off, official administrative approval, or is an urgent emergency):
-          Advise them to email me at {email} with full details, or call my office contact at {phone} for an urgent/emergency meeting.
+RULES:
+1. Speak in the first person ("I", "my lab", "my research").
+2. Be welcoming, encouraging, articulate, and concise (1-2 paragraphs).
+3. If discussing meetings or timetable, strictly adhere to the real-world date ({today_day}) and open slots provided. Propose discussing topics digitally if not free.
 
 {history_prompt}Visitor: {query}
 

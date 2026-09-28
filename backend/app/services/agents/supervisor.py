@@ -16,7 +16,7 @@ BIO_CONTACT_PATTERN = re.compile(
 )
 
 RESEARCH_KEYWORD_PATTERN = re.compile(
-    r"\b(phd|doctorate|mtech|btech|scholar|scholars|advising|advise|supervision|admissions?|prospective|join|openings?|lab|cse|computer\s+science|paper|papers|publication|publications|patent|patents|project|projects|grant|research|conference|journal|doi|algorithm|model|architecture|dataset|healthcare|sensor|sensors|iot|ecg|eeg|wearable|clinical|medical|deep\s+learning|machine\s+learning|neural)\b",
+    r"\b(ai|ml|quantum|quntum|computing|cloud|fog|edge|phd|doctorate|mtech|btech|scholar|scholars|advising|advise|supervision|admissions?|prospective|join|openings?|lab|cse|computer\s+science|paper|papers|publication|publications|patent|patents|project|projects|grant|research|conference|journal|doi|algorithm|model|architecture|dataset|healthcare|sensor|sensors|iot|ecg|eeg|wearable|clinical|medical|deep\s+learning|machine\s+learning|neural|thesis|proposal|idea)\b",
     re.IGNORECASE
 )
 

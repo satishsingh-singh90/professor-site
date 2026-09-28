@@ -125,13 +125,14 @@ def stream_twin_chat(query: str, db: Session, history: List[Dict[str, str]] = No
     yield f"data: {json.dumps({'type': 'sources', 'sources': sources, 'agent': active_agent, 'intent': state.get('intent')})}\n\n"
 
     # Step 3: Stream tokens from Gemini
-    models_to_try = [PRIMARY_MODEL] + FALLBACK_MODELS
+    # Step 3: Stream tokens from Gemini
+    models_to_try = [PRIMARY_MODEL]
     streamed_anything = False
 
     for m_name in models_to_try:
         try:
             model = genai.GenerativeModel(m_name)
-            resp = model.generate_content(prompt, request_options={"timeout": 15})
+            resp = model.generate_content(prompt, request_options={"timeout": 12})
             if resp and resp.text:
                 streamed_anything = True
                 words = resp.text.split(" ")
@@ -140,7 +141,7 @@ def stream_twin_chat(query: str, db: Session, history: List[Dict[str, str]] = No
                     if i + 3 < len(words):
                         chunk += " "
                     yield f"data: {json.dumps({'type': 'chunk', 'text': chunk})}\n\n"
-                    time.sleep(0.015)
+                    time.sleep(0.012)
                 break
         except Exception as e:
             print(f"[Agent Stream] Model {m_name} attempt failed: {e}")

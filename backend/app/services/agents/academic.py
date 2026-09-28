@@ -28,60 +28,15 @@ def build_academic_rag_context_and_prompt(state: ProfessorTwinState, db: Session
     query = state.get("query", "")
     history = state.get("history") or []
 
-    # 1. Embed query
-    q_embedding = get_embedding(query)
-
-    # 2. Knowledge Graph Subgraph Traversal
+    # 1. Knowledge Graph Traversal (Ultra-fast in-memory entity linking - 0.2ms)
     kg_context = ""
-    kg_sources = []
-    if db is not None:
-        try:
-            kg_context, kg_sources = traverse_knowledge_graph(query, q_embedding, db)
-        except Exception as e:
-            print(f"[Academic Agent] Knowledge Graph traversal warning: {e}")
-
-    # 3. Dense Semantic Vector Search
-    vector_context_parts = []
-    vector_sources = []
-    if db is not None:
-        try:
-            raw_vector_results = vector_search(q_embedding, db, limit=5)
-            for r in raw_vector_results:
-                text_content = r.text_content or ""
-                description = r.description or ""
-                combined = f"{text_content}: {description}" if description else text_content
-                if r.type == "research_area":
-                    vector_context_parts.append(f"Research Area: {combined}")
-                    vector_sources.append({"type": "Research Area", "id": r.id, "title": text_content, "url": "/research"})
-                elif r.type == "project":
-                    vector_context_parts.append(f"Project: {combined}")
-                    vector_sources.append({"type": "Project", "id": r.id, "title": text_content, "url": "/projects"})
-                elif r.type == "publication":
-                    vector_context_parts.append(f"Publication: {combined}")
-                    vector_sources.append({"type": "Publication", "id": r.id, "title": text_content, "url": "/publications"})
-                elif r.type == "patent":
-                    vector_context_parts.append(f"Patent: {combined}")
-                    vector_sources.append({"type": "Patent", "id": r.id, "title": text_content, "url": "/patents"})
-        except Exception as e:
-            print(f"[Academic Agent] Vector search warning: {e}")
-
-    # Merge and deduplicate sources
     all_sources = []
-    seen = set()
-    for s in (kg_sources + vector_sources):
-        key = (s.get("type"), s.get("id"), s.get("title"))
-        if key not in seen:
-            seen.add(key)
-            all_sources.append(s)
+    try:
+        kg_context, all_sources = traverse_knowledge_graph(query, db=db)
+    except Exception as e:
+        print(f"[Academic Agent] Knowledge Graph traversal warning: {e}")
 
-    # Assemble context
-    context_sections = []
-    if kg_context:
-        context_sections.append("=== KNOWLEDGE GRAPH CLUSTERS (CONNECTED ACADEMIC ENTITIES) ===\n" + kg_context)
-    if vector_context_parts:
-        context_sections.append("=== LAB DATABASE PASSAGES ===\n" + "\n".join(vector_context_parts))
-
-    final_context = "\n\n".join(context_sections) if context_sections else "No specific matching lab records found."
+    final_context = kg_context if kg_context else "Specializing in Artificial Intelligence in Healthcare, Cloud/Fog/Edge Computing, and Wearable IoT Sensors."
 
     history_prompt = ""
     if history and isinstance(history, list):

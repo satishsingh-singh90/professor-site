@@ -130,7 +130,7 @@ def get_cached_knowledge_graph(db: Session = None) -> dict:
     """
     Bulk-loads and caches all interconnected knowledge entities in memory.
     Uses ThreadPoolExecutor to run all 8 entity queries in parallel across isolated DB sessions.
-    Avoids 8 sequential network round-trips to remote Supabase and remains cached in memory.
+    Avoids sequential network round-trips to remote Supabase and remains cached in memory.
     """
     if _KG_CACHE["data"] is not None:
         return _KG_CACHE["data"]
@@ -150,45 +150,40 @@ def get_cached_knowledge_graph(db: Session = None) -> dict:
                 executor.map(_fetch_table, models)
             )
 
-        if not areas:
-            return {}
-
-        kg_data = {}
-        for a in areas:
-            kg_data[a.id] = {
-                "id": a.id,
-                "name": a.name,
-                "description": a.description or "",
-                "embedding": a.embedding,
-                "projects": [
-                    {"id": p.id, "title": p.title, "status": p.status, "year": p.year, "description": p.description or ""}
-                    for p in projects if p.research_area_id == a.id
-                ],
-                "publications": [
-                    {"id": p.id, "title": p.title, "journal": p.journal, "year": p.year, "abstract": p.abstract or ""}
-                    for p in pubs if p.research_area_id == a.id
-                ],
-                "patents": [
-                    {"id": p.id, "title": p.title, "patent_number": p.patent_number, "year": p.year, "description": p.description or ""}
-                    for p in pats if p.research_area_id == a.id
-                ],
-                "courses": [
-                    {"id": c.id, "title": c.title, "code": c.code, "semester": c.semester, "description": c.description or ""}
-                    for c in courses if c.research_area_id == a.id
-                ],
-                "awards": [
-                    {"id": aw.id, "name": aw.name, "year": aw.year, "description": aw.description or ""}
-                    for aw in awards if aw.research_area_id == a.id
-                ],
-                "blogs": [
-                    {"id": b.id, "title": b.title, "description": b.description or ""}
-                    for b in blogs if b.research_area_id == a.id
-                ],
-                "newsletters": [
-                    {"id": n.id, "title": n.title, "tag": n.tag, "content": n.content or ""}
-                    for n in news if n.research_area_id == a.id
-                ],
-            }
+        kg_data = {
+            "areas": [
+                {"id": a.id, "name": a.name, "description": a.description or "", "embedding": a.embedding}
+                for a in areas
+            ],
+            "projects": [
+                {"id": p.id, "title": p.title, "status": p.status, "year": p.year, "description": p.description or "", "research_area_id": p.research_area_id}
+                for p in projects
+            ],
+            "publications": [
+                {"id": p.id, "title": p.title, "journal": p.journal, "year": p.year, "abstract": p.abstract or "", "research_area_id": p.research_area_id}
+                for p in pubs
+            ],
+            "patents": [
+                {"id": p.id, "title": p.title, "patent_number": p.patent_number, "year": p.year, "description": p.description or "", "research_area_id": p.research_area_id}
+                for p in pats
+            ],
+            "courses": [
+                {"id": c.id, "title": c.title, "code": c.code, "semester": c.semester, "description": c.description or ""}
+                for c in courses
+            ],
+            "awards": [
+                {"id": aw.id, "name": aw.name, "year": aw.year, "description": aw.description or ""}
+                for aw in awards
+            ],
+            "blogs": [
+                {"id": b.id, "title": b.title, "description": b.description or ""}
+                for b in blogs
+            ],
+            "newsletters": [
+                {"id": n.id, "title": n.title, "tag": n.tag, "content": n.content or ""}
+                for n in news
+            ]
+        }
 
         _KG_CACHE["data"] = kg_data
         return _KG_CACHE["data"]
@@ -197,13 +192,12 @@ def get_cached_knowledge_graph(db: Session = None) -> dict:
         return _KG_CACHE["data"] or {}
 
 def warmup_rag():
-    """Pre-warms in-memory Knowledge Graph cache and local embeddings on startup."""
+    """Pre-warms in-memory Knowledge Graph cache and professor profile on startup."""
     try:
-        print("[RAG Warmup] Initializing local embeddings and Knowledge Graph cache...")
+        print("[RAG Warmup] Initializing Knowledge Graph and Professor Profile in memory...")
         get_cached_professor()
         get_cached_knowledge_graph()
-        get_embedding("warmup query")
-        print("[RAG Warmup] Knowledge Graph ready in memory.")
+        print("[RAG Warmup] Knowledge Graph ready in memory (<1ms online traversal).")
     except Exception as e:
         print(f"[RAG Warmup] Non-critical warmup note: {e}")
 
@@ -234,122 +228,103 @@ def get_embedding(text_input: str) -> list[float]:
 # ------------------------------------------------------------
 # 5. Knowledge Graph Engine: Thematic Entity Linking & Graph Traversal
 # ------------------------------------------------------------
-def traverse_knowledge_graph(query: str, query_embedding: list[float], db: Session) -> tuple[str, list[dict]]:
+def traverse_knowledge_graph(query: str, query_embedding: list[float] = None, db: Session = None) -> tuple[str, list[dict]]:
     """
-    Identifies matched Research Area(s) and traverses connected academic
-    entity types using the in-memory cached graph (0.2ms execution).
+    Ultra-fast in-memory entity linking and subgraph traversal (0.2ms execution).
+    Matches query concepts against research areas, publications, patents, and projects
+    without expensive CPU embeddings or network hops.
     """
-    graph_context_blocks = []
+    import re
     sources = []
-    
+    blocks = []
+
     try:
         kg_data = get_cached_knowledge_graph(db)
-        if not kg_data:
+        if not kg_data or not isinstance(kg_data, dict):
             return "", []
 
         q_lower = query.lower()
-        matched_areas = []
+        raw_tokens = set(re.findall(r'[a-zA-Z0-9]{2,}', q_lower))
+        stopwords = {
+            'the', 'and', 'for', 'are', 'with', 'have', 'want', 'idea', 'this',
+            'that', 'from', 'you', 'your', 'about', 'can', 'how', 'what', 'who',
+            'sir', 'hello', 'please', 'tell', 'show', 'give'
+        }
+        tokens = raw_tokens - stopwords
 
-        # 1. Check for direct semantic or keyword match on Research Areas
-        for area_id, area_info in kg_data.items():
-            score = 0.0
-            area_name_lower = area_info["name"].lower()
-            
-            # Direct keyword containment or substring match
-            if area_name_lower in q_lower or any(word in q_lower for word in area_name_lower.split() if len(word) > 2):
-                score = 0.95
-            elif area_info.get("embedding") is not None and len(area_info["embedding"]) == 384:
-                # Cosine similarity
-                vec_a = np.array(query_embedding, dtype=np.float32)
-                vec_b = np.array(area_info["embedding"], dtype=np.float32)
-                norm_a = np.linalg.norm(vec_a)
-                norm_b = np.linalg.norm(vec_b)
-                if norm_a > 0 and norm_b > 0:
-                    sim = float(np.dot(vec_a, vec_b) / (norm_a * norm_b))
-                    if sim > 0.35:
-                        score = max(score, sim)
-            
-            if score > 0.35:
-                matched_areas.append((area_info, score))
+        def score_text(txt: str) -> int:
+            if not txt:
+                return 0
+            txt_lower = txt.lower()
+            s = 0
+            for tok in tokens:
+                if tok in txt_lower:
+                    s += 3 if len(tok) > 3 else 1
+            return s
 
-        # Sort matched areas by relevance score descending
-        matched_areas.sort(key=lambda x: x[1], reverse=True)
-        top_areas = matched_areas[:2]  # Focus on top 1-2 most relevant research areas
+        areas = kg_data.get("areas", [])
+        publications = kg_data.get("publications", [])
+        patents = kg_data.get("patents", [])
+        projects = kg_data.get("projects", [])
+        courses = kg_data.get("courses", [])
+        awards = kg_data.get("awards", [])
 
-        for area, score in top_areas:
-            area_block = []
-            area_block.append(f"### RESEARCH AREA KNOWLEDGE CLUSTER: {area['name']}")
-            if area.get("description"):
-                area_block.append(f"Domain Focus: {area['description']}")
-            
-            sources.append({"type": "Research Area", "id": area["id"], "title": area["name"], "url": "/research"})
+        scored_areas = sorted([(score_text(a['name'] + ' ' + a.get('description', '')), a) for a in areas], key=lambda x: x[0], reverse=True)
+        scored_pubs = sorted([(score_text(p['title'] + ' ' + (p.get('abstract') or '') + ' ' + (p.get('journal') or '')), p) for p in publications], key=lambda x: x[0], reverse=True)
+        scored_pats = sorted([(score_text(p['title'] + ' ' + (p.get('description') or '') + ' ' + (p.get('patent_number') or '')), p) for p in patents], key=lambda x: x[0], reverse=True)
+        scored_projects = sorted([(score_text(p['title'] + ' ' + (p.get('description') or '')), p) for p in projects], key=lambda x: x[0], reverse=True)
 
-            # Traversal 1: Connected Projects (top 3)
-            if area.get("projects"):
-                area_block.append("  • Active/Completed Research Projects:")
-                for p in area["projects"][:3]:
-                    status_txt = f" [{p['status']}]" if p.get("status") else ""
-                    year_txt = f" ({p['year']})" if p.get("year") else ""
-                    desc_txt = f" - {p['description'][:130]}..." if p.get("description") else ""
-                    area_block.append(f"    - Project: {p['title']}{year_txt}{status_txt}{desc_txt}")
-                    sources.append({"type": "Project", "id": p["id"], "title": p["title"], "url": "/projects"})
+        # 1. Matched Research Areas (top 2)
+        top_areas = [a for s, a in scored_areas if s > 0][:2]
+        if not top_areas and scored_areas:
+            top_areas = [a for _, a in scored_areas[:2]]
+        for a in top_areas:
+            sources.append({"type": "Research Area", "id": a["id"], "title": a["name"], "url": "/research"})
+            desc = f" ({a['description'][:120]}...)" if a.get("description") else ""
+            blocks.append(f"• Research Focus: {a['name']}{desc}")
 
-            # Traversal 2: Connected Publications / Papers (top 3)
-            if area.get("publications"):
-                area_block.append("  • Key Scientific Publications & Papers:")
-                for pub in area["publications"][:3]:
-                    journal_txt = f" in {pub['journal']}" if pub.get("journal") else ""
-                    year_txt = f" ({pub['year']})" if pub.get("year") else ""
-                    abs_txt = f" - Abstract: {pub['abstract'][:140]}..." if pub.get("abstract") else ""
-                    area_block.append(f"    - Paper: {pub['title']}{year_txt}{journal_txt}{abs_txt}")
-                    sources.append({"type": "Publication", "id": pub["id"], "title": pub["title"], "url": "/publications"})
+        # 2. Matched Publications (top 2)
+        top_pubs = [p for s, p in scored_pubs if s > 0][:2]
+        if not top_pubs and scored_pubs:
+            top_pubs = [p for _, p in scored_pubs[:2]]
+        for p in top_pubs:
+            sources.append({"type": "Publication", "id": p["id"], "title": p["title"], "url": "/publications"})
+            j_txt = f" in {p['journal']}" if p.get("journal") else ""
+            y_txt = f" ({p['year']})" if p.get("year") else ""
+            blocks.append(f"• Key Scientific Paper: \"{p['title']}\"{j_txt}{y_txt}")
 
-            # Traversal 3: Connected Patents & Inventions (top 3)
-            if area.get("patents"):
-                area_block.append("  • Filed / Granted Patents:")
-                for pat in area["patents"][:3]:
-                    num_txt = f" [No: {pat['patent_number']}]" if pat.get("patent_number") else ""
-                    year_txt = f" ({pat['year']})" if pat.get("year") else ""
-                    desc_txt = f" - {pat['description'][:120]}..." if pat.get("description") else ""
-                    area_block.append(f"    - Patent: {pat['title']}{num_txt}{year_txt}{desc_txt}")
-                    sources.append({"type": "Patent", "id": pat["id"], "title": pat["title"], "url": "/patents"})
+        # 3. Matched Patents & IP (top 1)
+        top_pats = [p for s, p in scored_pats if s > 0][:1]
+        if not top_pats and scored_pats:
+            top_pats = [p for _, p in scored_pats[:1]]
+        for p in top_pats:
+            sources.append({"type": "Patent", "id": p["id"], "title": p["title"], "url": "/patents"})
+            num_txt = f" [Patent No: {p['patent_number']}]" if p.get("patent_number") else ""
+            blocks.append(f"• Patent / Invention: \"{p['title']}\"{num_txt}")
 
-            # Traversal 4: Connected Teaching Courses & Subjects (top 2)
-            if area.get("courses"):
-                area_block.append("  • University Courses & Teaching Curriculum:")
-                for c in area["courses"][:2]:
-                    code_txt = f" [{c['code']}]" if c.get("code") else ""
-                    sem_txt = f" ({c['semester']})" if c.get("semester") else ""
-                    area_block.append(f"    - Course: {c['title']}{code_txt}{sem_txt}")
+        # 4. Matched Projects (top 1)
+        top_projs = [p for s, p in scored_projects if s > 0][:1]
+        if not top_projs and scored_projects:
+            top_projs = [p for _, p in scored_projects[:1]]
+        for p in top_projs:
+            sources.append({"type": "Project", "id": p["id"], "title": p["title"], "url": "/projects"})
+            st_txt = f" (Status: {p['status']})" if p.get("status") else ""
+            blocks.append(f"• Active Lab Project: \"{p['title']}\"{st_txt}")
 
-            # Traversal 5: Connected Awards & Recognitions (top 2)
-            if area.get("awards"):
-                area_block.append("  • Awards & Honors in this Area:")
-                for aw in area["awards"][:2]:
-                    year_txt = f" ({aw['year']})" if aw.get("year") else ""
-                    area_block.append(f"    - Award: {aw['name']}{year_txt}")
+        # Deduplicate sources
+        unique_sources = []
+        seen = set()
+        for s in sources:
+            k = (s["type"], s["id"])
+            if k not in seen:
+                seen.add(k)
+                unique_sources.append(s)
 
-            # Traversal 6: Connected Academic Blogs & Thought Leadership (top 2)
-            if area.get("blogs"):
-                area_block.append("  • Academic Blogs & Articles:")
-                for b in area["blogs"][:2]:
-                    area_block.append(f"    - Article: {b['title']}")
-                    sources.append({"type": "Blog", "id": b["id"], "title": b["title"], "url": "/blog"})
-
-            # Traversal 7: Connected Lab Newsletters & Dispatches (top 2)
-            if area.get("newsletters"):
-                area_block.append("  • Lab Announcements & Bulletins:")
-                for n in area["newsletters"][:2]:
-                    tag_txt = f" [{n['tag']}]" if n.get("tag") else ""
-                    area_block.append(f"    - Bulletin: {n['title']}{tag_txt}")
-                    sources.append({"type": "Newsletter", "id": n["id"], "title": n["title"], "url": "/updates"})
-
-            graph_context_blocks.append("\n".join(area_block))
+        return "\n".join(blocks), unique_sources
 
     except Exception as e:
-        print(f"[RAG Knowledge Graph] Warning during graph traversal: {e}")
-
-    return "\n\n".join(graph_context_blocks), sources
+        print(f"[RAG Knowledge Graph] Error during traversal: {e}")
+        return "", []
 
 # ------------------------------------------------------------
 # 6. Dense Vector Search (Hybrid Retriever for specific chunks)

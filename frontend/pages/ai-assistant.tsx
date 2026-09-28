@@ -158,7 +158,19 @@ Feel free to ask me anything about our scientific findings, prospective graduate
             const data = JSON.parse(dataStr);
             if (data.type === 'sources') {
               receivedSources = data.sources || [];
-              if (hasAddedAssistant) {
+              if (!hasAddedAssistant) {
+                hasAddedAssistant = true;
+                setLoading(false);
+                setIsStreaming(true);
+                const assistantMessage: Message = {
+                  id: assistantId,
+                  role: 'assistant',
+                  content: '',
+                  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  sources: receivedSources
+                };
+                setMessages(prev => [...prev, assistantMessage]);
+              } else {
                 setMessages(prev =>
                   prev.map(m => m.id === assistantId ? { ...m, sources: receivedSources } : m)
                 );
@@ -431,7 +443,7 @@ How can I help you today?`,
                         <div className="font-sans leading-relaxed text-sm">
                           {isUser ? (
                             <div className="whitespace-pre-wrap">{m.content}</div>
-                          ) : (
+                          ) : m.content ? (
                             <ReactMarkdown
                               remarkPlugins={[remarkGfm]}
                               components={{
@@ -476,6 +488,11 @@ How can I help you today?`,
                             >
                               {m.content}
                             </ReactMarkdown>
+                          ) : (
+                            <div className="flex items-center space-x-2 text-ink-500 py-1 text-xs font-mono">
+                              <span className="w-2 h-2 rounded-full bg-scholar-teal animate-ping" />
+                              <span>Preparing scholarly response...</span>
+                            </div>
                           )}
                         </div>
 
