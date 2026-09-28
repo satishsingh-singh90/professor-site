@@ -124,7 +124,7 @@ def academic_rag_node(state: ProfessorTwinState, db: Session = None) -> dict:
     for m_name in [PRIMARY_MODEL] + FALLBACK_MODELS:
         try:
             model = genai.GenerativeModel(m_name)
-            resp = model.generate_content(prompt, request_options={"timeout": 12})
+            resp = model.generate_content(prompt, request_options={"timeout": 30})
             if resp and resp.text:
                 answer = resp.text
                 break

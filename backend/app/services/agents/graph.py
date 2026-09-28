@@ -132,7 +132,7 @@ def stream_twin_chat(query: str, db: Session, history: List[Dict[str, str]] = No
             response = model.generate_content(
                 prompt,
                 stream=True,
-                request_options={"timeout": 10}
+                request_options={"timeout": 30}
             )
             for chunk in response:
                 if chunk.text:

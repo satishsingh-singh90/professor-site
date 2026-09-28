@@ -71,44 +71,18 @@ def supervisor_node(state: ProfessorTwinState) -> dict:
             "reasoning": "Fast-path heuristic matched academic, research, patent, or publication keywords."
         }
         
-    # -------------------------------------------------------------
-    # 2. Tier 2: Low-Latency LLM Intent Classification
-    # -------------------------------------------------------------
-    try:
-        classifier_prompt = f"""You are an intent triage router for a university professor's AI Digital Twin.
-Classify the following visitor query into EXACTLY ONE category:
-- "casual_bio": General greeting, professor identity, email, office location, bio, casual conversation, general inquiry.
-- "academic_rag": Specific questions about research papers, published work, patents, clinical projects, scientific methods, machine learning architectures, healthcare IoT inventions.
-
-Query: "{query}"
-
-Output ONLY a JSON object with this format:
-{{"intent": "casual_bio" | "academic_rag", "reasoning": "<brief reason>"}}"""
-
-        model = genai.GenerativeModel("gemini-3.1-flash-lite")
-        resp = model.generate_content(
-            classifier_prompt,
-            generation_config={"response_mime_type": "application/json"}
-        )
-        data = json.loads(resp.text)
-        intent = data.get("intent", "academic_rag")
-        active_agent = "persona_agent" if intent == "casual_bio" else "academic_rag_agent"
-        
+    # Default intelligent routing (Zero LLM quota consumption)
+    if is_research:
         return {
-            "intent": intent,
-            "active_agent": active_agent,
-            "reasoning": data.get("reasoning", "LLM classified intent.")
+            "intent": "academic_rag",
+            "active_agent": "academic_rag_agent",
+            "reasoning": "Fast-path heuristic routed to Academic RAG agent."
         }
-    except Exception as e:
-        # Graceful fallback: If LLM classification fails, route based on simple word check
-        if is_research:
-            return {
-                "intent": "academic_rag",
-                "active_agent": "academic_rag_agent",
-                "reasoning": f"Fallback to RAG due to classifier error: {e}"
-            }
-        return {
-            "intent": "casual_bio",
-            "active_agent": "persona_agent",
-            "reasoning": f"Fallback to Persona due to classifier error: {e}"
-        }
+    
+    # If conversational or general inquiry, route to persona agent
+    return {
+        "intent": "casual_bio",
+        "active_agent": "persona_agent",
+        "reasoning": "Default heuristic routed to Persona agent."
+    }
+

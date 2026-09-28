@@ -3,8 +3,7 @@ from datetime import datetime, timedelta
 from app.core.config import settings
 from app.services.agents.state import ProfessorTwinState
 
-PRIMARY_MODEL = "gemini-3.1-flash-lite"
-FALLBACK_MODELS = ["gemini-3.1-flash-lite-preview", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-flash-latest"]
+from app.services.rag import PRIMARY_MODEL, FALLBACK_MODELS
 
 def get_temporal_context() -> dict:
     """Computes dynamic real-world calendar and clock context for current execution."""
@@ -161,7 +160,7 @@ def persona_node(state: ProfessorTwinState) -> dict:
     for m_name in [PRIMARY_MODEL] + FALLBACK_MODELS:
         try:
             model = genai.GenerativeModel(m_name)
-            resp = model.generate_content(prompt, request_options={"timeout": 10})
+            resp = model.generate_content(prompt, request_options={"timeout": 30})
             if resp and resp.text:
                 answer = resp.text
                 break

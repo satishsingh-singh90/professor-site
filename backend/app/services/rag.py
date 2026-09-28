@@ -39,9 +39,9 @@ from app.core.database import SessionLocal
 # 2. Gemini for chat (Ultra-fast conversational models)
 # ------------------------------------------------------------
 genai.configure(api_key=settings.GEMINI_API_KEY)
-PRIMARY_MODEL = "gemini-3.1-flash-lite"   # Ultra-low latency (~2s TTFT) & high reliability
-FALLBACK_MODELS = ["gemini-3.1-flash-lite-preview", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-flash-latest"]
-GEMINI_TIMEOUT_SECONDS = 30  # Generous timeout preventing 504 DeadlineExceeded on complex RAG prompts
+PRIMARY_MODEL = "gemini-3.6-flash"
+FALLBACK_MODELS = ["gemma-4-26b-a4b-it"]
+GEMINI_TIMEOUT_SECONDS = 30
 
 # ------------------------------------------------------------
 # 3. In-memory Professor Profile & Knowledge Graph Area Cache
@@ -535,7 +535,7 @@ def rag_answer_stream(question: str, db: Session, history: list = None):
             response = model.generate_content(
                 system_persona,
                 stream=True,
-                request_options={"timeout": 7}
+                request_options={"timeout": 30}
             )
             for chunk in response:
                 if chunk.text:
@@ -575,7 +575,7 @@ def rag_answer(question: str, db: Session, history: list = None):
             model = genai.GenerativeModel(m_name)
             response = model.generate_content(
                 system_persona,
-                request_options={"timeout": 7}
+                request_options={"timeout": 30}
             )
             if response and response.text:
                 answer = response.text
