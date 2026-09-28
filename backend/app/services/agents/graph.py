@@ -1,5 +1,6 @@
 import json
 import re
+import time
 from typing import Dict, Any, List
 from sqlalchemy.orm import Session
 import google.generativeai as genai
@@ -130,16 +131,16 @@ def stream_twin_chat(query: str, db: Session, history: List[Dict[str, str]] = No
     for m_name in models_to_try:
         try:
             model = genai.GenerativeModel(m_name)
-            response = model.generate_content(
-                prompt,
-                stream=True,
-                request_options={"timeout": 30}
-            )
-            for chunk in response:
-                if chunk.text:
-                    streamed_anything = True
-                    yield f"data: {json.dumps({'type': 'chunk', 'text': chunk.text})}\n\n"
-            if streamed_anything:
+            resp = model.generate_content(prompt, request_options={"timeout": 15})
+            if resp and resp.text:
+                streamed_anything = True
+                words = resp.text.split(" ")
+                for i in range(0, len(words), 3):
+                    chunk = " ".join(words[i:i+3])
+                    if i + 3 < len(words):
+                        chunk += " "
+                    yield f"data: {json.dumps({'type': 'chunk', 'text': chunk})}\n\n"
+                    time.sleep(0.015)
                 break
         except Exception as e:
             print(f"[Agent Stream] Model {m_name} attempt failed: {e}")

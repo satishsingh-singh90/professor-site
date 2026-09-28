@@ -532,16 +532,19 @@ def rag_answer_stream(question: str, db: Session, history: list = None):
     for m_name in models_to_try:
         try:
             model = genai.GenerativeModel(m_name)
-            response = model.generate_content(
+            resp = model.generate_content(
                 system_persona,
-                stream=True,
-                request_options={"timeout": 30}
+                request_options={"timeout": 15}
             )
-            for chunk in response:
-                if chunk.text:
-                    streamed_anything = True
-                    yield f"data: {json.dumps({'type': 'chunk', 'text': chunk.text})}\n\n"
-            if streamed_anything:
+            if resp and resp.text:
+                streamed_anything = True
+                words = resp.text.split(" ")
+                for i in range(0, len(words), 3):
+                    chunk = " ".join(words[i:i+3])
+                    if i + 3 < len(words):
+                        chunk += " "
+                    yield f"data: {json.dumps({'type': 'chunk', 'text': chunk})}\n\n"
+                    time.sleep(0.015)
                 break
         except Exception as e:
             print(f"[RAG Stream] Model {m_name} attempt failed: {e}")
