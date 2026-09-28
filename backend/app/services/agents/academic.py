@@ -82,13 +82,13 @@ def academic_rag_node(state: ProfessorTwinState, db: Session = None) -> dict:
     for m_name in [PRIMARY_MODEL] + FALLBACK_MODELS:
         try:
             model = genai.GenerativeModel(m_name)
-            resp = model.generate_content(prompt, request_options={"timeout": 30})
+            resp = model.generate_content(prompt, request_options={"timeout": 10})
             if resp and resp.text:
                 answer = resp.text
                 break
         except Exception as e:
             print(f"[Academic Agent] Model {m_name} attempt failed: {e}")
-            continue
+            break
 
     if not answer:
         prof_name = (state.get("prof_profile") or {}).get("name", "Dr. Prabh Deep Singh")

@@ -40,8 +40,8 @@ from app.core.database import SessionLocal
 # ------------------------------------------------------------
 genai.configure(api_key=settings.GEMINI_API_KEY)
 PRIMARY_MODEL = "gemini-robotics-er-2-preview"
-FALLBACK_MODELS = ["gemini-3.6-flash", "gemini-3.8-flash"]
-GEMINI_TIMEOUT_SECONDS = 30
+FALLBACK_MODELS = []  # Avoid sequential retry delays on exhausted 429 models
+GEMINI_TIMEOUT_SECONDS = 10
 
 # ------------------------------------------------------------
 # 3. In-memory Professor Profile & Knowledge Graph Area Cache
