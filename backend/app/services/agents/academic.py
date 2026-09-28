@@ -1,6 +1,9 @@
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import google.generativeai as genai
 from sqlalchemy.orm import Session
+
+# Indian Standard Time (IST - UTC+5:30) for Graphic Era Deemed to Be University, India
+IST = timezone(timedelta(hours=5, minutes=30))
 from app.services.agents.state import ProfessorTwinState
 from app.services.rag import (
     get_embedding,
@@ -89,7 +92,7 @@ def build_academic_rag_context_and_prompt(state: ProfessorTwinState, db: Session
         if formatted:
             history_prompt = "Recent Conversation History:\n" + "\n".join(formatted) + "\n\n"
 
-    current_date_str = datetime.now().strftime("%A, %B %d, %Y")
+    current_date_str = datetime.now(IST).strftime("%A, %B %d, %Y")
 
     system_persona = f"""You are {prof_name}, {prof_title} in {prof_dept} at {prof_uni}.
 Bio / Background: {prof_bio}

@@ -1,16 +1,19 @@
 import google.generativeai as genai
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from app.core.config import settings
 from app.services.agents.state import ProfessorTwinState
 
 from app.services.rag import PRIMARY_MODEL, FALLBACK_MODELS
 
+# Indian Standard Time (IST - UTC+5:30) for Graphic Era Deemed to Be University, India
+IST = timezone(timedelta(hours=5, minutes=30))
+
 def get_temporal_context() -> dict:
-    """Computes dynamic real-world calendar and clock context for current execution."""
-    now = datetime.now()
-    today_day = now.strftime("%A")            # e.g., "Saturday"
-    today_date = now.strftime("%B %d, %Y")     # e.g., "September 19, 2026"
-    current_time = now.strftime("%I:%M %p")    # e.g., "01:35 PM"
+    """Computes dynamic real-world calendar and clock context in Indian Standard Time (IST)."""
+    now = datetime.now(IST)
+    today_day = now.strftime("%A")            # e.g., "Monday"
+    today_date = now.strftime("%B %d, %Y")     # e.g., "September 28, 2026"
+    current_time = now.strftime("%I:%M %p")    # e.g., "10:05 PM"
 
     tomorrow = now + timedelta(days=1)
     tomorrow_day = tomorrow.strftime("%A")
